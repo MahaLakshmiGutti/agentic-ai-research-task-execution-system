@@ -213,8 +213,8 @@ Agentic-AI/
 python main.py
 ```
 
-This starts the backend on `http://127.0.0.1:8001` and the frontend on
-`http://127.0.0.1:5173`, streaming both processes' logs prefixed
+This starts the backend on `http://localhost:8001` and the frontend on
+`http://localhost:5173`, streaming both processes' logs prefixed
 `[backend]` / `[frontend]`, and stops both cleanly on Ctrl+C. It also
 auto-runs `npm install` for you the first time if `frontend/node_modules`
 is missing.
@@ -252,7 +252,7 @@ npm run dev
 ```
 
 Open `http://localhost:5173`. The Vite dev server proxies `/api/*` to
-`http://127.0.0.1:8001` (see `frontend/vite.config.ts`).
+`http://localhost:8001` (see `frontend/vite.config.ts`).
 
 ## Environment variables
 
@@ -285,14 +285,14 @@ backend's public URL — see [Deployment](#deployment).
 Example:
 
 ```bash
-curl -s -X POST http://127.0.0.1:8001/api/runs \
+curl -s -X POST http://localhost:8001/api/runs \
   -H "Content-Type: application/json" \
   -d '{"objective": "Analyze the latest developments in Generative AI and prepare a structured report with key trends, companies, challenges, and future opportunities."}'
 # {"run_id": "..."}
 
-curl -s http://127.0.0.1:8001/api/runs/<run_id>
-curl -s http://127.0.0.1:8001/api/runs/<run_id>/events
-curl -s http://127.0.0.1:8001/api/runs/<run_id>/report
+curl -s http://localhost:8001/api/runs/<run_id>
+curl -s http://localhost:8001/api/runs/<run_id>/events
+curl -s http://localhost:8001/api/runs/<run_id>/report
 ```
 
 The frontend polls `/{run_id}` and `/events` every 1.5s while a run is

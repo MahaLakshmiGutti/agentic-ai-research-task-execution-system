@@ -105,11 +105,20 @@ def _completion_message(agent: str, state: WorkflowState) -> str:
     if agent == "analyst":
         analysis = state.get("analysis", {})
         return f"Identified {len(analysis.get('insights', []))} key insights."
-    if agent in ("writer", "writer_revision"):
+    if agent == "writer":
         return "Draft report written."
-    if agent in ("reviewer", "reviewer_revision"):
+    if agent == "writer_revision":
+        return "Revised draft written based on reviewer feedback."
+    if agent == "reviewer":
         review = state.get("review", {})
         return "Draft approved." if review.get("approved") else "Draft rejected, revision requested."
+    if agent == "reviewer_revision":
+        review = state.get("review", {})
+        return (
+            "Revised draft approved."
+            if review.get("approved")
+            else "Revised draft still rejected; delivering the best-effort report."
+        )
     return "Step completed."
 
 

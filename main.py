@@ -102,8 +102,8 @@ def main() -> int:
     for t in threads:
         t.start()
 
-    print(f"[launcher] backend:  http://127.0.0.1:{BACKEND_PORT}", flush=True)
-    print(f"[launcher] frontend: http://127.0.0.1:{FRONTEND_PORT}", flush=True)
+    print(f"[launcher] backend:  http://localhost:{BACKEND_PORT}", flush=True)
+    print(f"[launcher] frontend: http://localhost:{FRONTEND_PORT}", flush=True)
     print("[launcher] Press Ctrl+C to stop both.", flush=True)
 
     try:

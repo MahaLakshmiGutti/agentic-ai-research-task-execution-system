@@ -4,7 +4,6 @@ import {
   BrainCircuit,
   CheckCircle2,
   ClipboardList,
-  Network,
   PenLine,
   SearchCheck,
   ShieldCheck,
@@ -15,21 +14,24 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cancelRun, createRun, getHealth, getReport, getRunEvents, getRunStatus } from "./api";
 import AnalysisView from "./components/AnalysisView";
+import DraftView from "./components/DraftView";
 import HistorySidebar from "./components/HistorySidebar";
 import ObjectiveForm from "./components/ObjectiveForm";
-import OrchestrationCanvas from "./components/OrchestrationCanvas";
 import PipelineStatus from "./components/PipelineStatus";
 import PlanView from "./components/PlanView";
-import SettingsPanel from "./components/SettingsPanel";
 import ReportView from "./components/ReportView";
 import ResearchView from "./components/ResearchView";
 import ReviewView from "./components/ReviewView";
 import {
   deriveAnalysis,
+  deriveDraftFirst,
+  deriveDraftRevision,
   deriveFinalReport,
+  deriveNeverApproved,
   derivePlan,
   deriveResearch,
-  deriveReview,
+  deriveReviewFirst,
+  deriveReviewRevision,
   deriveRevisionPending,
 } from "./deriveFromEvents";
 import type { HealthStatus, ReportData, RunEvent, RunStatus } from "./types";
@@ -54,8 +56,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
-  const [activeTab, setActiveTab] = useState<"process" | "flow" | "final">("process");
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"process" | "final">("process");
 
   const pollTimer = useRef<number | null>(null);
   // Tracks whichever run is currently selected so a slow response for a run
@@ -82,6 +83,7 @@ export default function App() {
     try {
       const [status, eventsRes] = await Promise.all([getRunStatus(id), getRunEvents(id, 0)]);
       if (currentRunIdRef.current !== id) return null;
+      setError(null);
       setRunStatus(status);
       setEvents(eventsRes.events);
       if (status.status === "completed") {
@@ -104,10 +106,22 @@ export default function App() {
     (id: string) => {
       stopPolling();
       currentRunIdRef.current = id;
+      let consecutiveFailures = 0;
       const tick = async () => {
         const status = await poll(id);
         if (currentRunIdRef.current !== id) return;
-        if (!status || !ACTIVE_STATUSES.has(status.status)) {
+        if (!status) {
+          // A single failed poll is likely a transient network blip, not the
+          // run finishing - keep polling. Only give up after several failures
+          // in a row, so a genuinely dead backend doesn't poll forever.
+          consecutiveFailures += 1;
+          if (consecutiveFailures >= 10) {
+            stopPolling();
+          }
+          return;
+        }
+        consecutiveFailures = 0;
+        if (!ACTIVE_STATUSES.has(status.status)) {
           stopPolling();
           setHistoryRefreshToken((t) => t + 1);
         }
@@ -178,17 +192,31 @@ export default function App() {
     ? { findings: report.research_findings ?? [], sources: report.sources ?? [] }
     : deriveResearch(events);
   const analysis = report?.analysis ?? deriveAnalysis(events);
-  const review = report?.review ?? deriveReview(events);
-  const finalReport = report?.final_report ?? deriveFinalReport(events);
+
+  // Each round's draft/review is read straight from the event log (rather
+  // than the single-round `report` object) so both the first pass and the
+  // revision pass stay visible side by side, instead of the revision
+  // silently overwriting the first round's output.
+  const draftFirst = deriveDraftFirst(events);
+  const reviewFirst = deriveReviewFirst(events);
+  const draftRevision = deriveDraftRevision(events);
+  const reviewRevision = deriveReviewRevision(events);
+
+  // The Final Response tab only unlocks once the Reviewer has actually
+  // approved a draft - never just because the (single, mandatory) revision
+  // cycle ran out. A revision that's rejected again still ends the run, but
+  // its output stays visible inline above (draftRevision/reviewRevision)
+  // rather than being presented as a "final" report.
+  const approved = report?.approved ?? runStatus?.approved ?? null;
+  const finalReport = approved ? (report?.final_report ?? deriveFinalReport(events)) : null;
   const revisionPending = !report && deriveRevisionPending(events);
+  const neverApproved = !revisionPending && deriveNeverApproved(events);
 
   const autoSwitchedRunId = useRef<string | null>(null);
   useEffect(() => {
     if (runId && finalReport && autoSwitchedRunId.current !== runId) {
       autoSwitchedRunId.current = runId;
-      // Don't yank a presenter out of the orchestration canvas mid-demo; only
-      // the default Process tab auto-advances to the finished report.
-      setActiveTab((tab) => (tab === "process" ? "final" : tab));
+      setActiveTab("final");
     }
   }, [runId, finalReport]);
 
@@ -199,15 +227,6 @@ export default function App() {
         refreshToken={historyRefreshToken}
         onSelect={handleSelectRun}
         onNew={handleNew}
-        onOpenSettings={() => setSettingsOpen(true)}
-      />
-
-      <SettingsPanel
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        onSaved={() => {
-          getHealth().then(setHealth).catch(() => setHealth(null));
-        }}
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
@@ -294,17 +313,6 @@ export default function App() {
                   Process
                 </button>
                 <button
-                  onClick={() => setActiveTab("flow")}
-                  className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
-                    activeTab === "flow"
-                      ? "border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400"
-                      : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-                  }`}
-                >
-                  <Network size={15} />
-                  Orchestration
-                </button>
-                <button
                   onClick={() => finalReport && setActiveTab("final")}
                   disabled={!finalReport}
                   title={finalReport ? undefined : "Available once the final report is ready"}
@@ -321,9 +329,7 @@ export default function App() {
                 </button>
               </div>
 
-              {activeTab === "flow" ? (
-                <OrchestrationCanvas events={events} runStatus={runStatus} />
-              ) : activeTab === "process" || !finalReport ? (
+              {activeTab === "process" || !finalReport ? (
                 <div className="flex flex-col gap-5">
                   <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -356,7 +362,10 @@ export default function App() {
                   <PlanView plan={plan} />
                   <ResearchView findings={findings} sources={sources} />
                   <AnalysisView analysis={analysis} />
-                  <ReviewView review={review} />
+                  <DraftView draft={draftFirst} title="Writer draft" />
+                  <ReviewView review={reviewFirst} title="Reviewer result" />
+                  <DraftView draft={draftRevision} title="Writer draft (revision)" />
+                  <ReviewView review={reviewRevision} title="Reviewer result (revision)" />
 
                   {revisionPending && (
                     <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400">
@@ -364,7 +373,14 @@ export default function App() {
                       Final Response tab will unlock once the revision is reviewed.
                     </p>
                   )}
-                  {!finalReport && !revisionPending && (
+                  {neverApproved && (
+                    <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+                      The Reviewer rejected the revised draft too. The Final Response tab stays locked since
+                      the report was never approved — see the Writer draft (revision) and Reviewer result
+                      (revision) above for the best-effort output.
+                    </p>
+                  )}
+                  {!finalReport && !revisionPending && !neverApproved && (
                     <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-500">
                       The Final Response tab will unlock once the Reviewer approves the report.
                     </div>

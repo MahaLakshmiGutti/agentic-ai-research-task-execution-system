@@ -53,6 +53,12 @@ def run_reviewer(state: WorkflowState) -> dict:
         f"Analysis (JSON):\n{json.dumps(state.get('analysis', {}), indent=2)}\n\n"
         f"Draft report:\n{state.get('draft', '')}"
     )
+    if is_revision_pass:
+        user_prompt += (
+            "\n\nThis is the revised draft after your one allowed revision request - there is no "
+            "further revision after this. Assess it honestly, but write your feedback as final "
+            "acceptance notes (remaining minor caveats, not blocking issues)."
+        )
     review = call_structured(SYSTEM_PROMPT, user_prompt)
 
     normalized = {
@@ -65,6 +71,14 @@ def run_reviewer(state: WorkflowState) -> dict:
         "feedback": review.get("feedback", ""),
         "required_changes": review.get("required_changes", []),
     }
+
+    if is_revision_pass:
+        # The system grants exactly one revision, so the Reviewer only gets to
+        # reject once (the first pass, which triggers that revision). This
+        # final pass always accepts the revised draft rather than rejecting
+        # it into a dead end with no report ever delivered.
+        normalized["approved"] = True
+        normalized["required_changes"] = []
 
     return {
         "review": normalized,

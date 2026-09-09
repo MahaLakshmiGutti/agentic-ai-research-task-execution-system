@@ -1,11 +1,17 @@
 import type { Review } from "../types";
 import Section from "./Section";
 
-export default function ReviewView({ review }: { review: Review | null }) {
+export default function ReviewView({
+  review,
+  title = "Reviewer result",
+}: {
+  review: Review | null;
+  title?: string;
+}) {
   if (!review) return null;
 
   return (
-    <Section title="Reviewer result">
+    <Section title={title}>
       <div className="mb-3 flex items-center gap-2">
         <span
           className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -16,9 +22,7 @@ export default function ReviewView({ review }: { review: Review | null }) {
         >
           {review.approved ? "Approved" : "Rejected"}
         </span>
-        <span className="text-xs text-slate-500 dark:text-slate-400">
-          Objective satisfied: {review.objective_satisfied ? "yes" : "no"}
-        </span>
+        
       </div>
 
       <p className="mb-3 text-sm text-slate-700 dark:text-slate-300">{review.feedback}</p>

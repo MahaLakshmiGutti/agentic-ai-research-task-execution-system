@@ -5,7 +5,6 @@ import {
   Loader2,
   Moon,
   Plus,
-  Settings as SettingsIcon,
   Sparkles,
   Sun,
   XCircle,
@@ -65,13 +64,11 @@ export default function HistorySidebar({
   refreshToken,
   onSelect,
   onNew,
-  onOpenSettings,
 }: {
   selectedRunId: string | null;
   refreshToken: number;
   onSelect: (runId: string) => void;
   onNew: () => void;
-  onOpenSettings: () => void;
 }) {
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [theme, toggleTheme] = useTheme();
@@ -107,18 +104,10 @@ export default function HistorySidebar({
           Agentic AI Research
         </span>
         <button
-          onClick={onOpenSettings}
-          aria-label="Model settings"
-          title="Model settings"
-          className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-        >
-          <SettingsIcon size={16} />
-        </button>
-        <button
           onClick={toggleTheme}
           aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
           title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+          className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
         >
           {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
         </button>
