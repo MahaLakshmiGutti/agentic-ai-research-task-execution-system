@@ -4,7 +4,7 @@ A multi-agent AI system that takes a natural-language research objective,
 plans it, researches it with a real web-search tool, analyzes the findings,
 writes a structured Markdown report, and runs that report through a
 Reviewer/Critic agent — automatically revising it once if the review fails —
-all orchestrated with **LangGraph**, powered by **Google Gemini**, exposed
+all orchestrated with **LangGraph**, powered by **OpenAI**, exposed
 through a **FastAPI** backend, and visualized live in a **React + TypeScript
 + Tailwind** frontend.
 
@@ -28,7 +28,6 @@ Example objective:
 - [Environment variables](#environment-variables)
 - [API usage](#api-usage)
 - [Deployment](#deployment)
-- [Known limitations](#known-limitations)
 
 ---
 
@@ -53,8 +52,8 @@ Example objective:
                      ┌───────────┬───────────┬───────┴──────┬────────────┐
                      ▼           ▼           ▼               ▼            ▼
                  Planner    Researcher    Analyst          Writer     Reviewer/
-                 (Gemini)   (Gemini +     (Gemini)         (Gemini)   Critic
-                             Tavily tool)                              (Gemini)
+                 (OpenAI)   (OpenAI +     (OpenAI)         (OpenAI)   Critic
+                             Tavily tool)                              (OpenAI)
                                                        │
                                           every step persisted to
                                                        ▼
@@ -65,7 +64,7 @@ Example objective:
                                           └─────────────────────┘
 ```
 
-The frontend never talks to Gemini or Tavily directly — it only calls the
+The frontend never talks to OpenAI or Tavily directly — it only calls the
 FastAPI backend, which owns the LangGraph workflow and all persistence.
 
 ## Agent roles
@@ -156,13 +155,13 @@ def tavily_web_search(query: str) -> list[dict]:
 ```
 
 For each Planner subtask, the Researcher calls this tool with a focused
-query, then asks Gemini to summarize *only* what's actually in the returned
+query, then asks OpenAI to summarize *only* what's actually in the returned
 results — the prompt explicitly forbids inventing sources or facts.
 
 ## Technologies used
 
-**Backend:** Python, FastAPI, LangGraph, LangChain (core + `langchain-google-genai`),
-Google Gemini API, Tavily Search API, Pydantic v2, SQLAlchemy + SQLite,
+**Backend:** Python, FastAPI, LangGraph, LangChain (core + `langchain-openai`),
+OpenAI API, Tavily Search API, Pydantic v2, SQLAlchemy + SQLite,
 python-dotenv, uvicorn.
 
 **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, `lucide-react`
@@ -182,12 +181,12 @@ Agentic-AI/
     .env.example
     app/
       main.py                FastAPI app + routes
-      config.py                env-driven settings (Gemini, Tavily, CORS, DB path)
+      config.py                env-driven settings (OpenAI, Tavily, CORS, DB path)
       database.py               SQLAlchemy engine/session setup
       models.py                  ORM models: Run, Task, Event, Report
       schemas.py                  Pydantic request/response models
       state.py                     shared LangGraph workflow state (TypedDict)
-      llm.py                        Gemini chat wrapper + structured-JSON helper
+      llm.py                        OpenAI chat wrapper + structured-JSON helper
       graph.py                      LangGraph StateGraph wiring the 5 agents
       agents/                        planner.py, researcher.py, analyst.py, writer.py, reviewer.py
       tools/tavily_search.py          real Tavily web search tool (Researcher only)
@@ -261,8 +260,8 @@ Set in `backend/.env` (see `backend/.env.example`):
 
 | Variable | Required | Description |
 |---|---|---|
-| `GEMINI_API_KEY` | Yes | Google Gemini API key. Never hard-coded — read via `os.getenv` in `app/config.py`. |
-| `GEMINI_MODEL` | Yes | The Gemini model to use for every agent call (e.g. `gemini-2.5-flash`, `gemini-2.5-pro`). Must be a model your API key actually has access to. |
+| `OPENAI_API_KEY` | Yes | OpenAI API key. Never hard-coded — read via `os.getenv` in `app/config.py`. |
+| `OPENAI_MODEL` | No (default `gpt-4o-mini`) | The OpenAI model to use for every agent call. Must be a model your API key actually has access to. |
 | `TAVILY_API_KEY` | Yes | Tavily Search API key, used only by the Researcher Agent's tool. |
 | `CORS_ORIGINS` | No (default `http://localhost:5173`) | Comma-separated list of origins allowed to call the API — set this to your deployed frontend URL in production. |
 | `DATABASE_PATH` | No (default `data/app.db`) | Path to the SQLite file, relative to `backend/`. |
@@ -275,7 +274,7 @@ backend's public URL — see [Deployment](#deployment).
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/health` | Health check; reports whether `GEMINI_API_KEY`/`TAVILY_API_KEY` are configured. |
+| `GET` | `/api/health` | Health check; reports whether `OPENAI_API_KEY`/`TAVILY_API_KEY` are configured. |
 | `POST` | `/api/runs` | Create a run: body `{ "objective": "..." }` → `{ "run_id": "..." }`. Execution starts immediately in the background. |
 | `GET` | `/api/runs` | List past runs (id, objective, status, approved, timestamps) — powers the chat-history sidebar. |
 | `GET` | `/api/runs/{run_id}` | Run status: phase, approval, revision count, cancelled flag, subtasks. |
@@ -298,4 +297,37 @@ curl -s http://127.0.0.1:8001/api/runs/<run_id>/report
 
 The frontend polls `/{run_id}` and `/events` every 1.5s while a run is
 active, then fetches `/report` once it completes.
+
+## Deployment
+
+**Live demo:** Backend — `<fill in Render URL>` · Frontend — `<fill in Vercel URL>`
+
+### Backend → Render
+
+1. Push this repository to GitHub.
+2. In Render, create a **Web Service** pointing at the repo, root directory
+   `backend/`.
+3. Build command: `pip install -r requirements.txt`
+4. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+5. Add environment variables in Render's dashboard: `OPENAI_API_KEY`,
+   `OPENAI_MODEL` (optional, defaults to `gpt-4o-mini`), `TAVILY_API_KEY`,
+   `CORS_ORIGINS` (set this to your Vercel frontend's URL once you have it),
+   `DATABASE_PATH` (optional, defaults to `data/app.db`).
+6. Note: Render's filesystem is ephemeral on redeploys — the SQLite file
+   will reset each deploy. For durable history across deploys, attach a
+   Render Disk mounted at `backend/data/` (Settings → Disks), or migrate to
+   a managed Postgres instance.
+
+### Frontend → Vercel
+
+1. In Vercel, import the same repository, root directory `frontend/`.
+2. Framework preset: Vite. Build command: `npm run build`. Output directory: `dist`.
+3. Since there is no Vite dev proxy in production, set a build-time env var
+   `VITE_API_BASE` to your Render backend's full API URL (e.g.
+   `https://your-app.onrender.com/api`) — `frontend/src/api.ts` already reads
+   this (`import.meta.env.VITE_API_BASE`) and falls back to the relative
+   `/api` path used locally.
+4. Set `CORS_ORIGINS` on the Render backend to include the resulting
+   `https://<project>.vercel.app` URL, then redeploy the backend so the new
+   origin takes effect.
 

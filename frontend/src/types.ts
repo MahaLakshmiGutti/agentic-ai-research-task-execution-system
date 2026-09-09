@@ -97,6 +97,30 @@ export interface HealthStatus {
   status: string;
   openai_configured: boolean;
   tavily_configured: boolean;
+  gemini_configured: boolean;
+  provider: string;
+  model: string;
+}
+
+export interface ModelOption {
+  id: string;
+  label: string;
+  note: string;
+}
+
+export interface ProviderInfo {
+  id: string;
+  label: string;
+  env_key: string;
+  configured: boolean;
+  default_model: string;
+  models: ModelOption[];
+}
+
+export interface AppSettings {
+  provider: string;
+  model: string;
+  providers: ProviderInfo[];
 }
 
 export interface RunSummary {

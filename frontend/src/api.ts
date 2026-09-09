@@ -1,4 +1,11 @@
-import type { HealthStatus, ReportData, RunEvent, RunStatus, RunSummary } from "./types";
+import type {
+  AppSettings,
+  HealthStatus,
+  ReportData,
+  RunEvent,
+  RunStatus,
+  RunSummary,
+} from "./types";
 
 // Locally, Vite's dev proxy forwards "/api" to the backend (see vite.config.ts).
 // In production (Vercel), there is no such proxy, so VITE_API_BASE must be set
@@ -55,5 +62,19 @@ export async function getReport(runId: string): Promise<ReportData> {
 
 export async function cancelRun(runId: string): Promise<{ run_id: string; status: string }> {
   const res = await fetch(`${BASE}/runs/${runId}/cancel`, { method: "POST" });
+  return json(res);
+}
+
+export async function getSettings(): Promise<AppSettings> {
+  const res = await fetch(`${BASE}/settings`);
+  return json(res);
+}
+
+export async function updateSettings(provider: string, model: string): Promise<AppSettings> {
+  const res = await fetch(`${BASE}/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, model }),
+  });
   return json(res);
 }

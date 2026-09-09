@@ -4,6 +4,7 @@ import threading
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from app import model_config
 from app.config import settings
 from app.database import SessionLocal, init_db
 from app.models import Event, Report, Run
@@ -13,10 +14,14 @@ from app.schemas import (
     CreateRunResponse,
     EventsResponse,
     HealthResponse,
+    ModelOptionOut,
+    ProviderOut,
     ReportResponse,
     RunListResponse,
     RunStatusResponse,
     RunSummary,
+    SettingsResponse,
+    UpdateSettingsRequest,
 )
 from app.services.run_manager import cancel_run, create_run, run_pipeline_sync
 
@@ -38,11 +43,50 @@ def on_startup() -> None:
 
 @app.get("/api/health", response_model=HealthResponse)
 def health() -> HealthResponse:
+    provider, model = model_config.get_active()
     return HealthResponse(
         status="ok",
         openai_configured=bool(settings.openai_api_key),
         tavily_configured=bool(settings.tavily_api_key),
+        gemini_configured=bool(settings.gemini_api_key),
+        provider=provider,
+        model=model,
     )
+
+
+def _settings_payload() -> SettingsResponse:
+    provider, model = model_config.get_active()
+    return SettingsResponse(
+        provider=provider,
+        model=model,
+        providers=[
+            ProviderOut(
+                id=spec.id,
+                label=spec.label,
+                env_key=spec.env_key,
+                configured=model_config.is_configured(spec.id),
+                default_model=spec.default_model,
+                models=[
+                    ModelOptionOut(id=m.id, label=m.label, note=m.note) for m in spec.models
+                ],
+            )
+            for spec in model_config.PROVIDERS.values()
+        ],
+    )
+
+
+@app.get("/api/settings", response_model=SettingsResponse)
+def get_settings() -> SettingsResponse:
+    return _settings_payload()
+
+
+@app.put("/api/settings", response_model=SettingsResponse)
+def update_settings(payload: UpdateSettingsRequest) -> SettingsResponse:
+    try:
+        model_config.set_active(payload.provider, payload.model)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _settings_payload()
 
 
 @app.post("/api/runs", response_model=CreateRunResponse)

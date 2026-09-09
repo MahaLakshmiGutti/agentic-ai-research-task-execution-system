@@ -14,6 +14,17 @@ Base your analysis strictly on the given findings. Do not invent information
 that is not supported by them. If the findings are too thin to support a
 category (e.g. no comparisons possible), return an empty list for it.
 
+Quality bar:
+- Each entry is one self-contained sentence that states something specific -
+  name the actual models, companies, numbers or dates from the findings. Reject
+  your own output if an entry would still read as true with every proper noun
+  removed ("adoption is accelerating" is worthless; say who, what and how much).
+- A trend describes change over time. A pattern describes something recurring
+  across several findings. A comparison sets two or more named things against
+  each other. An insight is a non-obvious implication. A conclusion answers the
+  objective. Do not repeat the same statement across categories.
+- Aim for 3-6 entries per category where the findings support it. Never pad.
+
 Respond with ONLY a JSON object of this exact shape, no prose, no markdown fences:
 {
   "trends": ["..."],

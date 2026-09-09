@@ -113,10 +113,31 @@ def _completion_message(agent: str, state: WorkflowState) -> str:
     return "Step completed."
 
 
+def _effective_agent(agent: str, state: WorkflowState, phase: str) -> str:
+    """Distinguish the revision pass from the first pass.
+
+    The graph re-enters the same "writer"/"reviewer" nodes for the revision, so
+    the node name alone cannot tell the two passes apart. The agents already
+    record which pass they are in via current_phase; before a node runs we infer
+    it from the state it is about to consume. Without this every event is
+    labelled "writer"/"reviewer" and the revision loop is invisible to the UI,
+    which keys off the writer_revision / reviewer_revision agent names.
+    """
+    if phase == "after":
+        return state.get("current_phase") or agent
+    if agent == "writer" and state.get("review"):
+        return "writer_revision"
+    if agent == "reviewer" and state.get("revision_count", 0) > 0:
+        return "reviewer_revision"
+    return agent
+
+
 def _run_pipeline(run_id: str, objective: str) -> None:
     db = SessionLocal()
 
     def on_step(agent: str, state: WorkflowState, phase: str) -> None:
+        agent = _effective_agent(agent, state, phase)
+
         if run_id in _CANCELLED_RUN_IDS:
             _log_event(db, run_id, agent, "failed", "Run cancelled by user.")
             raise RunCancelled(run_id)

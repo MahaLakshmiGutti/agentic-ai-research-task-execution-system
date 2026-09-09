@@ -11,11 +11,18 @@ Write a clear, well-structured final report in Markdown that satisfies the
 user's research objective, using the provided research findings and analysis.
 
 Rules:
-- Use Markdown headings, bullet points, and tables where useful.
-- Include a "Sources" section at the end listing the source URLs actually
-  provided to you. Cite sources inline (e.g. [1], [2]) where claims come from
-  them, matching the numbering in the Sources section.
-- Do not invent facts, figures, or sources beyond what was provided.
+- Use Markdown headings, bullet points, and tables where useful. Prefer a table
+  whenever you are comparing three or more things across the same dimensions.
+- You are given a pre-numbered list of sources. Cite them inline using those
+  exact numbers, e.g. [1] or [2][5]. EVERY specific claim - a figure, a date, a
+  named company, product or benchmark result - must carry at least one inline
+  citation. A section with no citations is a defect.
+- End with a "Sources" section reproducing that numbered list verbatim, same
+  numbers, so the inline markers resolve.
+- Do not invent facts, figures, or sources beyond what was provided. If the
+  findings do not support a claim, leave it out rather than hedging it.
+- Be specific over general: name the actual models, companies, numbers and
+  dates present in the findings instead of describing them in the abstract.
 - Structure: Title, Executive Summary, then sections covering each relevant
   subtask/finding, an Analysis / Insights section, a Conclusion, and Sources.
 Output ONLY the Markdown report, no surrounding commentary."""
@@ -29,11 +36,27 @@ well-supported. Do not invent facts, figures, or sources beyond what was
 provided. Output ONLY the revised Markdown report, no surrounding commentary."""
 
 
+def _numbered_sources(state: WorkflowState) -> str:
+    """Sources as a pre-numbered list.
+
+    The Writer is asked to cite inline as [1], [2]; handing it raw JSON left it
+    with no stable numbering to cite against, so citations came out missing or
+    invented. Numbering them here makes the mapping unambiguous.
+    """
+    sources = state.get("sources", []) or []
+    if not sources:
+        return "(no sources were returned)"
+    return "\n".join(
+        f"[{i}] {s.get('title', 'Untitled')} - {s.get('url', '')}"
+        for i, s in enumerate(sources, start=1)
+    )
+
+
 def _context_block(state: WorkflowState) -> str:
     return (
         f"Research objective: {state['objective']}\n\n"
         f"Research findings (JSON):\n{json.dumps(state.get('research_findings', []), indent=2)}\n\n"
-        f"Sources (JSON):\n{json.dumps(state.get('sources', []), indent=2)}\n\n"
+        f"Numbered sources - cite with these exact numbers:\n{_numbered_sources(state)}\n\n"
         f"Analysis (JSON):\n{json.dumps(state.get('analysis', {}), indent=2)}"
     )
 

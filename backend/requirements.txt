@@ -6,4 +6,5 @@ sqlalchemy==2.0.52
 langgraph==1.2.11
 langchain-core==1.6.2
 langchain-openai==1.6.1
+langchain-google-genai==4.4.0
 tavily-python==0.8.1

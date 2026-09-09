@@ -8,8 +8,17 @@ load_dotenv(BACKEND_DIR / ".env")
 
 
 class Settings:
+    # Which provider the agents talk to by default. Switchable at runtime from
+    # the UI (see app/model_config.py) so a demo can move between providers
+    # without a restart.
+    llm_provider: str = os.getenv("LLM_PROVIDER", "openai").strip().lower()
+
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
-    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5.5")
+
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+
     tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
     cors_origins: list[str] = [
         origin.strip()

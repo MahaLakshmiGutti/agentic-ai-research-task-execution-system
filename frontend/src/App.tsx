@@ -4,6 +4,7 @@ import {
   BrainCircuit,
   CheckCircle2,
   ClipboardList,
+  Network,
   PenLine,
   SearchCheck,
   ShieldCheck,
@@ -16,8 +17,10 @@ import { cancelRun, createRun, getHealth, getReport, getRunEvents, getRunStatus 
 import AnalysisView from "./components/AnalysisView";
 import HistorySidebar from "./components/HistorySidebar";
 import ObjectiveForm from "./components/ObjectiveForm";
+import OrchestrationCanvas from "./components/OrchestrationCanvas";
 import PipelineStatus from "./components/PipelineStatus";
 import PlanView from "./components/PlanView";
+import SettingsPanel from "./components/SettingsPanel";
 import ReportView from "./components/ReportView";
 import ResearchView from "./components/ResearchView";
 import ReviewView from "./components/ReviewView";
@@ -51,7 +54,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
-  const [activeTab, setActiveTab] = useState<"process" | "final">("process");
+  const [activeTab, setActiveTab] = useState<"process" | "flow" | "final">("process");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const pollTimer = useRef<number | null>(null);
   // Tracks whichever run is currently selected so a slow response for a run
@@ -182,7 +186,9 @@ export default function App() {
   useEffect(() => {
     if (runId && finalReport && autoSwitchedRunId.current !== runId) {
       autoSwitchedRunId.current = runId;
-      setActiveTab("final");
+      // Don't yank a presenter out of the orchestration canvas mid-demo; only
+      // the default Process tab auto-advances to the finished report.
+      setActiveTab((tab) => (tab === "process" ? "final" : tab));
     }
   }, [runId, finalReport]);
 
@@ -193,6 +199,15 @@ export default function App() {
         refreshToken={historyRefreshToken}
         onSelect={handleSelectRun}
         onNew={handleNew}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
+
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onSaved={() => {
+          getHealth().then(setHealth).catch(() => setHealth(null));
+        }}
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
@@ -209,10 +224,13 @@ export default function App() {
               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                 Planner &rarr; Researcher &rarr; Analyst &rarr; Writer &rarr; Reviewer, orchestrated with LangGraph.
               </p>
-              {health && (!health.openai_configured || !health.tavily_configured) && (
+              {health &&
+                ((health.provider === "google" ? !health.gemini_configured : !health.openai_configured) ||
+                  !health.tavily_configured) && (
                 <p className="mt-3 flex items-center justify-center gap-1.5 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
                   <AlertTriangle size={13} />
-                  {!health.openai_configured && "OPENAI_API_KEY is not configured. "}
+                  {health.provider === "google" && !health.gemini_configured && "GEMINI_API_KEY is not configured. "}
+                  {health.provider !== "google" && !health.openai_configured && "OPENAI_API_KEY is not configured. "}
                   {!health.tavily_configured && "TAVILY_API_KEY is not configured. "}
                   Set these in backend/.env before running a research task.
                 </p>
@@ -276,6 +294,17 @@ export default function App() {
                   Process
                 </button>
                 <button
+                  onClick={() => setActiveTab("flow")}
+                  className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+                    activeTab === "flow"
+                      ? "border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400"
+                      : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                  }`}
+                >
+                  <Network size={15} />
+                  Orchestration
+                </button>
+                <button
                   onClick={() => finalReport && setActiveTab("final")}
                   disabled={!finalReport}
                   title={finalReport ? undefined : "Available once the final report is ready"}
@@ -292,7 +321,9 @@ export default function App() {
                 </button>
               </div>
 
-              {activeTab === "process" || !finalReport ? (
+              {activeTab === "flow" ? (
+                <OrchestrationCanvas events={events} runStatus={runStatus} />
+              ) : activeTab === "process" || !finalReport ? (
                 <div className="flex flex-col gap-5">
                   <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-2">

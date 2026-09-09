@@ -100,3 +100,32 @@ class HealthResponse(BaseModel):
     status: str
     openai_configured: bool
     tavily_configured: bool
+    gemini_configured: bool = False
+    provider: str = "openai"
+    model: str = ""
+
+
+class ModelOptionOut(BaseModel):
+    id: str
+    label: str
+    note: str
+
+
+class ProviderOut(BaseModel):
+    id: str
+    label: str
+    env_key: str
+    configured: bool
+    default_model: str
+    models: list[ModelOptionOut]
+
+
+class SettingsResponse(BaseModel):
+    provider: str
+    model: str
+    providers: list[ProviderOut]
+
+
+class UpdateSettingsRequest(BaseModel):
+    provider: str = Field(min_length=1, max_length=40)
+    model: str = Field(min_length=1, max_length=120)

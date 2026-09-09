@@ -12,6 +12,15 @@ Summarize ONLY what is supported by the provided search results. Do not invent
 facts, statistics, or sources that are not present in the results. If the
 results are thin or irrelevant, say so plainly in the summary.
 
+Quality bar:
+- Prefer concrete detail over generality: carry across the actual names,
+  figures, dates and version numbers that appear in the results, because later
+  agents can only cite what you extract here.
+- Never state a number or date that is not literally present in the results.
+- If results disagree, report the disagreement rather than silently picking one.
+- key_points are short standalone facts, not topic labels. 3-6 of them.
+- Do not editorialize or recommend; that is the Analyst's job.
+
 Respond with ONLY a JSON object of this exact shape, no prose, no markdown fences:
 {
   "summary": "a few sentences summarizing findings for this subtask, grounded only in the results",
