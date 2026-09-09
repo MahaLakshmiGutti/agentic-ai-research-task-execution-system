@@ -22,7 +22,6 @@ export default function ReviewView({
         >
           {review.approved ? "Approved" : "Rejected"}
         </span>
-        
       </div>
 
       <p className="mb-3 text-sm text-slate-700 dark:text-slate-300">{review.feedback}</p>

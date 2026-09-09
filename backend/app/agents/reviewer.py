@@ -36,7 +36,6 @@ Respond with ONLY a JSON object of this exact shape, no prose, no markdown fence
   "relevance": "short assessment",
   "consistency": "short assessment",
   "factual_support": "short assessment",
-  "objective_satisfied": true or false,
   "feedback": "overall feedback paragraph",
   "required_changes": ["specific actionable change 1", "..."]
 }
@@ -67,7 +66,6 @@ def run_reviewer(state: WorkflowState) -> dict:
         "relevance": review.get("relevance", ""),
         "consistency": review.get("consistency", ""),
         "factual_support": review.get("factual_support", ""),
-        "objective_satisfied": bool(review.get("objective_satisfied", False)),
         "feedback": review.get("feedback", ""),
         "required_changes": review.get("required_changes", []),
     }

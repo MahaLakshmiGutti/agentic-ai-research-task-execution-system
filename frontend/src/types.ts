@@ -44,7 +44,6 @@ export interface Review {
   relevance: string;
   consistency: string;
   factual_support: string;
-  objective_satisfied: boolean;
   feedback: string;
   required_changes: string[];
 }
