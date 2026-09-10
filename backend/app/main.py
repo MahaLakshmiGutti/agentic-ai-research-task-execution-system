@@ -36,6 +36,19 @@ def on_startup() -> None:
     init_db()
 
 
+@app.get("/")
+def root() -> dict:
+    # A visitor hitting the bare backend URL (e.g. from the Render dashboard)
+    # would otherwise see FastAPI's default {"detail":"Not Found"} - this
+    # gives a friendly, unambiguous "yes, the API is up" instead.
+    return {
+        "status": "ok",
+        "service": "Agentic AI Research & Task Execution System API",
+        "docs": "/docs",
+        "health": "/api/health",
+    }
+
+
 @app.get("/api/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(
