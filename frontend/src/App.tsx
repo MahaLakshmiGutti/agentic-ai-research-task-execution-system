@@ -4,6 +4,7 @@ import {
   BrainCircuit,
   CheckCircle2,
   ClipboardList,
+  LayoutList,
   PenLine,
   SearchCheck,
   ShieldCheck,
@@ -13,15 +14,11 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cancelRun, createRun, getHealth, getReport, getRunEvents, getRunStatus } from "./api";
-import AnalysisView from "./components/AnalysisView";
-import DraftView from "./components/DraftView";
+import AgentOutputView from "./components/AgentOutputView";
 import HistorySidebar from "./components/HistorySidebar";
 import ObjectiveForm from "./components/ObjectiveForm";
 import PipelineStatus from "./components/PipelineStatus";
-import PlanView from "./components/PlanView";
 import ReportView from "./components/ReportView";
-import ResearchView from "./components/ResearchView";
-import ReviewView from "./components/ReviewView";
 import {
   deriveAnalysis,
   deriveDraftFirst,
@@ -34,7 +31,7 @@ import {
   deriveReviewRevision,
   deriveRevisionPending,
 } from "./deriveFromEvents";
-import type { HealthStatus, ReportData, RunEvent, RunStatus } from "./types";
+import type { AgentKey, HealthStatus, ReportData, RunEvent, RunStatus } from "./types";
 
 const POLL_INTERVAL_MS = 1500;
 const ACTIVE_STATUSES = new Set(["pending", "running"]);
@@ -56,7 +53,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
-  const [activeTab, setActiveTab] = useState<"process" | "final">("process");
+  const [activeTab, setActiveTab] = useState<"process" | "output" | "final">("process");
+  const [selectedAgent, setSelectedAgent] = useState<AgentKey | null>(null);
 
   const pollTimer = useRef<number | null>(null);
   // Tracks whichever run is currently selected so a slow response for a run
@@ -138,6 +136,7 @@ export default function App() {
     setEvents([]);
     setRunStatus(null);
     setActiveTab("process");
+    setSelectedAgent(null);
     autoSwitchedRunId.current = null;
 
     try {
@@ -157,6 +156,7 @@ export default function App() {
     setRunStatus(null);
     setRunId(id);
     setActiveTab("process");
+    setSelectedAgent(null);
     autoSwitchedRunId.current = null;
     startPollingLoop(id);
   }
@@ -170,7 +170,13 @@ export default function App() {
     setReport(null);
     setError(null);
     setActiveTab("process");
+    setSelectedAgent(null);
     autoSwitchedRunId.current = null;
+  }
+
+  function handleSelectAgent(agent: AgentKey) {
+    setSelectedAgent(agent);
+    setActiveTab("output");
   }
 
   async function handleCancel() {
@@ -313,6 +319,17 @@ export default function App() {
                   Process
                 </button>
                 <button
+                  onClick={() => setActiveTab("output")}
+                  className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+                    activeTab === "output"
+                      ? "border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400"
+                      : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                  }`}
+                >
+                  <LayoutList size={15} />
+                  Agent's Output
+                </button>
+                <button
                   onClick={() => finalReport && setActiveTab("final")}
                   disabled={!finalReport}
                   title={finalReport ? undefined : "Available once the final report is ready"}
@@ -329,7 +346,26 @@ export default function App() {
                 </button>
               </div>
 
-              {activeTab === "process" || !finalReport ? (
+              {activeTab === "final" && finalReport ? (
+                <ReportView
+                  report={finalReport}
+                  approved={report?.approved ?? runStatus?.approved ?? null}
+                  revisionCount={report?.revision_count ?? runStatus?.revision_count ?? 0}
+                />
+              ) : activeTab === "output" ? (
+                <AgentOutputView
+                  selectedAgent={selectedAgent}
+                  onSelectAgent={setSelectedAgent}
+                  plan={plan}
+                  findings={findings}
+                  sources={sources}
+                  analysis={analysis}
+                  draftFirst={draftFirst}
+                  reviewFirst={reviewFirst}
+                  draftRevision={draftRevision}
+                  reviewRevision={reviewRevision}
+                />
+              ) : (
                 <div className="flex flex-col gap-5">
                   <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -353,19 +389,11 @@ export default function App() {
                     <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Agent status
                     </p>
-                    <PipelineStatus events={events} />
+                    <PipelineStatus events={events} onSelectAgent={handleSelectAgent} />
                     {runStatus.error && (
                       <p className="mt-3 text-sm text-red-600 dark:text-red-400">Error: {runStatus.error}</p>
                     )}
                   </section>
-
-                  <PlanView plan={plan} />
-                  <ResearchView findings={findings} sources={sources} />
-                  <AnalysisView analysis={analysis} />
-                  <DraftView draft={draftFirst} title="Writer draft" />
-                  <ReviewView review={reviewFirst} title="Reviewer result" />
-                  <DraftView draft={draftRevision} title="Writer draft (revision)" />
-                  <ReviewView review={reviewRevision} title="Reviewer result (revision)" />
 
                   {revisionPending && (
                     <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400">
@@ -376,8 +404,8 @@ export default function App() {
                   {neverApproved && (
                     <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
                       The Reviewer rejected the revised draft too. The Final Response tab stays locked since
-                      the report was never approved — see the Writer draft (revision) and Reviewer result
-                      (revision) above for the best-effort output.
+                      the report was never approved — see the Writer (Revision) and Reviewer (Revision)
+                      output in the Agent's Output tab for the best-effort report.
                     </p>
                   )}
                   {!finalReport && !revisionPending && !neverApproved && (
@@ -386,12 +414,6 @@ export default function App() {
                     </div>
                   )}
                 </div>
-              ) : (
-                <ReportView
-                  report={finalReport}
-                  approved={report?.approved ?? runStatus?.approved ?? null}
-                  revisionCount={report?.revision_count ?? runStatus?.revision_count ?? 0}
-                />
               )}
             </div>
           )}

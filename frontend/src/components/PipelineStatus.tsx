@@ -77,7 +77,13 @@ function StatusIcon({ status }: { status: string }) {
   return <CircleDashed size={16} />;
 }
 
-export default function PipelineStatus({ events }: { events: RunEvent[] }) {
+export default function PipelineStatus({
+  events,
+  onSelectAgent,
+}: {
+  events: RunEvent[];
+  onSelectAgent?: (agent: AgentKey) => void;
+}) {
   const hasRevision = events.some(
     (e) => e.agent === "writer_revision" || e.agent === "reviewer_revision"
   );
@@ -91,6 +97,7 @@ export default function PipelineStatus({ events }: { events: RunEvent[] }) {
         const style = STATUS_STYLES[status] ?? STATUS_STYLES.pending;
         const Icon = stage.icon;
         const isLast = idx === stages.length - 1;
+        const hasOutput = status === "completed";
 
         return (
           <li key={stage.key} className="relative flex gap-3 pb-6 last:pb-0">
@@ -105,7 +112,15 @@ export default function PipelineStatus({ events }: { events: RunEvent[] }) {
             >
               <Icon size={16} />
             </div>
-            <div className="min-w-0 flex-1 pt-0.5">
+            <button
+              type="button"
+              disabled={!hasOutput || !onSelectAgent}
+              onClick={() => onSelectAgent?.(stage.key)}
+              className={`min-w-0 flex-1 rounded-lg pt-0.5 text-left ${
+                hasOutput && onSelectAgent ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40" : "cursor-default"
+              }`}
+              title={hasOutput ? `View ${stage.label} output` : undefined}
+            >
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`text-sm font-semibold ${style.text}`}>{stage.label}</span>
                 <span
@@ -118,7 +133,7 @@ export default function PipelineStatus({ events }: { events: RunEvent[] }) {
               <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400" title={message}>
                 {message}
               </p>
-            </div>
+            </button>
           </li>
         );
       })}
