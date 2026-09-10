@@ -7,13 +7,12 @@ export default defineConfig({
     host: "localhost",
     port: 5173,
     proxy: {
-      // Target the concrete loopback address, not "localhost": on Windows,
-      // Node's proxy client can resolve "localhost" to IPv6 (::1), which
-      // uvicorn (bound to 127.0.0.1 only) refuses, causing intermittent
-      // ECONNREFUSED/500s even though the backend is up. The site itself is
-      // still served at http://localhost:5173.
+      // The backend (see main.py) is launched with `uvicorn --host localhost`
+      // specifically so it binds both IPv4 and IPv6 loopback - otherwise
+      // Node's proxy client resolving "localhost" to ::1 while uvicorn only
+      // listened on 127.0.0.1 caused intermittent ECONNREFUSED/500s.
       "/api": {
-        target: "http://127.0.0.1:8001",
+        target: "http://localhost:8001",
         changeOrigin: true,
       },
     },

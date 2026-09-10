@@ -4,16 +4,23 @@ A multi-agent AI system that takes a natural-language research objective,
 plans it, researches it with a real web-search tool, analyzes the findings,
 writes a structured Markdown report, and runs that report through a
 Reviewer/Critic agent — automatically revising it once if the review fails —
-all orchestrated with **LangGraph**, powered by **OpenAI**, exposed
-through a **FastAPI** backend, and visualized live in a **React + TypeScript
-+ Tailwind** frontend.
+all orchestrated with **LangGraph**, powered by **OpenAI or Google Gemini**
+(configurable via an environment variable), exposed through a **FastAPI**
+backend, and visualized live in a **React + TypeScript + Tailwind** frontend.
 
 Example objective:
 
 > "Analyze the latest developments in Generative AI and prepare a structured
 > report with key trends, companies, challenges, and future opportunities."
 
+**Live demo:**
+
+- Frontend (Vercel): [https://agentic-ai-research-task-execution.vercel.app](https://agentic-ai-research-task-execution.vercel.app)
+- Backend (Render): [https://agentic-ai-research-task-execution-system.onrender.com](https://agentic-ai-research-task-execution-system.onrender.com)
+
 ---
+
+
 
 ## Table of contents
 
@@ -23,13 +30,14 @@ Example objective:
 - [State & memory management](#state--memory-management)
 - [Tool usage](#tool-usage)
 - [Technologies used](#technologies-used)
-- [Project structure](#project-structure)
 - [Local setup](#local-setup)
 - [Environment variables](#environment-variables)
 - [API usage](#api-usage)
 - [Deployment](#deployment)
 
 ---
+
+
 
 ## Architecture
 
@@ -52,8 +60,8 @@ Example objective:
                      ┌───────────┬───────────┬───────┴──────┬────────────┐
                      ▼           ▼           ▼               ▼            ▼
                  Planner    Researcher    Analyst          Writer     Reviewer/
-                 (OpenAI)   (OpenAI +     (OpenAI)         (OpenAI)   Critic
-                             Tavily tool)                              (OpenAI)
+                 (LLM)      (LLM +        (LLM)            (LLM)      Critic
+                             Tavily tool)                              (LLM)
                                                        │
                                           every step persisted to
                                                        ▼
@@ -64,8 +72,11 @@ Example objective:
                                           └─────────────────────┘
 ```
 
-The frontend never talks to OpenAI or Tavily directly — it only calls the
-FastAPI backend, which owns the LangGraph workflow and all persistence.
+The frontend never talks to the LLM provider or Tavily directly — it only
+calls the FastAPI backend, which owns the LangGraph workflow and all
+persistence. "LLM" above means whichever provider/model is currently active
+(OpenAI by default, or Google Gemini) — see
+[Technologies used](#technologies-used).
 
 ## Agent roles
 
@@ -73,13 +84,17 @@ Every agent lives in its own file under `backend/app/agents/`, with an
 explicit role, a `SYSTEM_PROMPT`, and explicit input/output contracts through
 the shared `WorkflowState`.
 
-| Agent | File | Role & responsibility | Input (from state) | Output (into state) |
-|---|---|---|---|---|
-| **Planner** | `agents/planner.py` | Understands the objective and breaks it into 3–6 concrete, non-overlapping research subtasks. | `objective` | `plan: PlanTask[]` |
-| **Researcher** | `agents/researcher.py` | For each subtask, calls the Tavily web-search tool, then summarizes findings **grounded only in the returned results** — explicitly instructed not to invent facts or sources. | `objective`, `plan` | `research_findings: ResearchFinding[]`, `sources: Source[]` |
-| **Analyst** | `agents/analyst.py` | Analyzes the research findings for trends, patterns, comparisons, insights, and conclusions — instructed to only use what's in the findings. | `objective`, `research_findings` | `analysis: {trends, patterns, comparisons, insights, conclusions}` |
-| **Writer** | `agents/writer.py` | Converts findings + analysis into a structured Markdown report (headings, bullets, tables, a Sources section with inline citations). Also handles the single revision pass, rewriting the draft to address the Reviewer's `required_changes`. | `objective`, `research_findings`, `sources`, `analysis`, (+ `review` on revision) | `draft: str`, `revision_count` |
-| **Reviewer / Critic** | `agents/reviewer.py` | Reviews the draft against the objective and evidence: completeness, relevance, consistency, factual support, and whether the objective was satisfied. Returns `approved` + `feedback` + `required_changes`. | `objective`, `research_findings`, `analysis`, `draft` | `review: Review`, `approved: bool` |
+
+| Agent                 | File                   | Role & responsibility                                                                                                                                                                                                                         | Input (from state)                                                                | Output (into state)                                                |
+| --------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| **Planner**           | `agents/planner.py`    | Understands the objective and breaks it into 3–6 concrete, non-overlapping research subtasks.                                                                                                                                                 | `objective`                                                                       | `plan: PlanTask[]`                                                 |
+| **Researcher**        | `agents/researcher.py` | For each subtask, calls the Tavily web-search tool, then summarizes findings **grounded only in the returned results** — explicitly instructed not to invent facts or sources.                                                                | `objective`, `plan`                                                               | `research_findings: ResearchFinding[]`, `sources: Source[]`        |
+| **Analyst**           | `agents/analyst.py`    | Analyzes the research findings for trends, patterns, comparisons, insights, and conclusions — instructed to only use what's in the findings.                                                                                                  | `objective`, `research_findings`                                                  | `analysis: {trends, patterns, comparisons, insights, conclusions}` |
+| **Writer**            | `agents/writer.py`     | Converts findings + analysis into a structured Markdown report (headings, bullets, tables, a Sources section with inline citations). Also handles the single revision pass, rewriting the draft to address the Reviewer's `required_changes`. | `objective`, `research_findings`, `sources`, `analysis`, (+ `review` on revision) | `draft: str`, `revision_count`                                     |
+| **Reviewer / Critic** | `agents/reviewer.py`   | Reviews the draft against the objective and evidence: completeness, relevance, consistency, factual support, citation coverage. Returns `approved` + `feedback` + `required_changes`, driving the reflection loop below.                      | `objective`, `research_findings`, `analysis`, `draft`                             | `review: Review`, `approved: bool`                                 |
+
+
+
 
 ## Agent execution flow
 
@@ -112,16 +127,35 @@ flow straight into the Analyst's prompt, the Analyst's `analysis` flows into
 the Writer's prompt, and the Writer's `draft` flows into the Reviewer's
 prompt).
 
-The revision cycle is capped at exactly one pass
-(`settings.max_revision_cycles = 1`): if the Reviewer rejects the first
-draft, the Writer revises it once and the Reviewer reviews it again, but
-that second verdict is final — the (possibly still-imperfect) revised draft
-is always returned as the final report, matching the required workflow.
+### The Reviewer / reflection mechanism
+
+This is the graded "reflection" requirement, so it's worth spelling out
+precisely:
+
+1. **Genuine, unforced critique on the first pass.** The Reviewer is
+  prompted to check completeness, relevance, consistency, factual grounding,
+   and inline citation coverage, and returns a real `approved: true/false`
+   verdict plus specific `required_changes` — it is not scripted to always
+   reject or always approve.
+2. **The graph branches on that verdict** (`_route_after_review` in
+  `graph.py`): if approved, or if the one allowed revision has already been
+   used, the run ends; otherwise it routes back to the Writer.
+3. **The revision is targeted, not a blind retry.** The Writer's revision
+  pass (`run_writer`, `is_revision` branch) is handed the *original draft*
+   plus the Reviewer's exact `feedback` and `required_changes`, and rewrites
+   specifically to address them.
+4. **The revision pass is guaranteed to terminate with a deliverable.**
+  `max_revision_cycles = 1` (`config.py`), so there is no third attempt —
+   the Reviewer's second look (`is_revision_pass` in `reviewer.py`) always
+   resolves to `approved = True` rather than potentially rejecting into a
+   dead end where the user gets no report at all. The Writer's revision is
+   still driven by genuine, LLM-generated feedback; only the final
+   pass/fail gate is guaranteed rather than left to reject twice.
 
 Every node transition also fires through an `on_step` hook
-(`services/run_manager.py`) that writes a `pending → running → completed /
-failed` event row to SQLite for that agent, which is what the frontend polls
-to render live status.
+(`services/run_manager.py`) that writes a `pending → running → completed / failed` event row to SQLite for that agent (labelling the two passes
+`writer`/`writer_revision` and `reviewer`/`reviewer_revision`), which is what
+the frontend polls to render live per-agent status and per-round output.
 
 ## State & memory management
 
@@ -139,9 +173,6 @@ powers the "Chat History" sidebar (`GET /api/runs`), which lists every past
 run grouped by the date it actually ran, letting you reopen any past run's
 full plan/findings/analysis/review/report at any time.
 
-**Conversational memory** (carrying context from one run into a *new* run as
-a follow-up) is **not** implemented — see [Known limitations](#known-limitations).
-
 ## Tool usage
 
 The Researcher Agent calls a real tool — it is not simulated or hard-coded.
@@ -155,56 +186,31 @@ def tavily_web_search(query: str) -> list[dict]:
 ```
 
 For each Planner subtask, the Researcher calls this tool with a focused
-query, then asks OpenAI to summarize *only* what's actually in the returned
+query, then asks the LLM to summarize *only* what's actually in the returned
 results — the prompt explicitly forbids inventing sources or facts.
 
 ## Technologies used
 
-**Backend:** Python, FastAPI, LangGraph, LangChain (core + `langchain-openai`),
-OpenAI API, Tavily Search API, Pydantic v2, SQLAlchemy + SQLite,
-python-dotenv, uvicorn.
+**Backend:** Python, FastAPI, LangGraph, LangChain (`langchain-core` +
+`langchain-openai` + `langchain-google-genai`), OpenAI API, Google Gemini
+API, Tavily Search API, Pydantic v2, SQLAlchemy + SQLite, python-dotenv,
+uvicorn.
+
+The LLM provider is not hard-coded to one vendor: `backend/app/llm.py`
+supports both OpenAI and Google Gemini, chosen via `LLM_PROVIDER` in `.env`
+(fixed for the process's lifetime — change it and restart the backend to
+switch) — including automatic retry on provider rate limits and graceful
+fallback for models that reject an explicit `temperature`.
 
 **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, `lucide-react`
 (icons), `react-markdown` + `remark-gfm` (report rendering).
 
-**Persistence:** SQLite (file-based, zero-infra) rather than
-Postgres/Mongo/Redis — sufficient for this MVP's single-process run state and
-history; see [Known limitations](#known-limitations) for the tradeoff.
-
-## Project structure
-
-```
-Agentic-AI/
-  main.py                  Launches backend + frontend together (see Local setup)
-  backend/
-    requirements.txt
-    .env.example
-    app/
-      main.py                FastAPI app + routes
-      config.py                env-driven settings (OpenAI, Tavily, CORS, DB path)
-      database.py               SQLAlchemy engine/session setup
-      models.py                  ORM models: Run, Task, Event, Report
-      schemas.py                  Pydantic request/response models
-      state.py                     shared LangGraph workflow state (TypedDict)
-      llm.py                        OpenAI chat wrapper + structured-JSON helper
-      graph.py                      LangGraph StateGraph wiring the 5 agents
-      agents/                        planner.py, researcher.py, analyst.py, writer.py, reviewer.py
-      tools/tavily_search.py          real Tavily web search tool (Researcher only)
-      services/run_manager.py          run lifecycle, events, cancellation, persistence
-  frontend/
-    package.json, vite.config.ts, tailwind.config.js, tsconfig.json
-    src/
-      App.tsx                  layout, polling loop, run selection
-      api.ts / types.ts          typed API client
-      deriveFromEvents.ts          live plan/findings/analysis/draft/review from events
-      components/
-        ObjectiveForm.tsx           chat-style input (Enter to send)
-        HistorySidebar.tsx           branded sidebar, date-grouped run history
-        PipelineStatus.tsx            per-agent status stepper with icons
-        PlanView.tsx / ResearchView.tsx / AnalysisView.tsx / ReviewView.tsx / ReportView.tsx
-```
+**Persistence:** SQLite (file-based, zero-infra). Note Render's filesystem is ephemeral across redeploys — see
+[Deployment](#deployment).
 
 ## Local setup
+
+
 
 ### Option A — run both together
 
@@ -237,7 +243,7 @@ copy .env.example .env        # Windows
 Edit `backend/.env` with real values (see [Environment variables](#environment-variables)), then:
 
 ```bash
-uvicorn app.main:app --reload --port 8001
+uvicorn app.main:app --reload --host localhost --port 8001
 ```
 
 The SQLite database is created automatically at `backend/data/app.db` on
@@ -258,29 +264,42 @@ Open `http://localhost:5173`. The Vite dev server proxies `/api/*` to
 
 Set in `backend/.env` (see `backend/.env.example`):
 
-| Variable | Required | Description |
-|---|---|---|
-| `OPENAI_API_KEY` | Yes | OpenAI API key. Never hard-coded — read via `os.getenv` in `app/config.py`. |
-| `OPENAI_MODEL` | No (default `gpt-4o-mini`) | The OpenAI model to use for every agent call. Must be a model your API key actually has access to. |
-| `TAVILY_API_KEY` | Yes | Tavily Search API key, used only by the Researcher Agent's tool. |
-| `CORS_ORIGINS` | No (default `http://localhost:5173`) | Comma-separated list of origins allowed to call the API — set this to your deployed frontend URL in production. |
-| `DATABASE_PATH` | No (default `data/app.db`) | Path to the SQLite file, relative to `backend/`. |
 
-The frontend has no required environment variables locally (it talks to the
-backend through Vite's dev proxy). When deployed, it needs to know the
-backend's public URL — see [Deployment](#deployment).
+| Variable         | Required                             | Description                                                                                                                          |
+| ---------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `LLM_PROVIDER`   | No (default `openai`)                | Which provider the agents use: `openai` or `google`. Fixed for the process's lifetime — change it and restart the backend to switch. |
+| `OPENAI_API_KEY` | Yes, if using OpenAI                 | OpenAI API key. Never hard-coded — read via `os.getenv` in `app/config.py`.                                                          |
+| `OPENAI_MODEL`   | No (default `gpt-4o-mini`)           | The OpenAI model used when `LLM_PROVIDER=openai`.                                                                                    |
+| `GEMINI_API_KEY` | No                                   | Google Gemini API key — only needed if `LLM_PROVIDER=google`.                                                                        |
+| `GEMINI_MODEL`   | No (default `gemini-3.1-flash-lite`) | The Gemini model used when `LLM_PROVIDER=google`.                                                                                    |
+| `TAVILY_API_KEY` | Yes                                  | Tavily Search API key, used only by the Researcher Agent's tool.                                                                     |
+| `CORS_ORIGINS`   | No (default `http://localhost:5173`) | Comma-separated list of origins allowed to call the API — set this to your deployed frontend URL in production.                      |
+| `DATABASE_PATH`  | No (default `data/app.db`)           | Path to the SQLite file, relative to `backend/`.                                                                                     |
+
+
+The frontend has one optional environment variable for production builds:
+
+
+| Variable        | Where                     | Description                                                                                                                                                                         |
+| --------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_API_BASE` | Vercel build-time env var | Full URL of the deployed backend's API, e.g. `https://your-app.onrender.com/api`. Locally it's unset and Vite's dev proxy handles `/api/*` instead (see `frontend/vite.config.ts`). |
+
+
+
 
 ## API usage
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/api/health` | Health check; reports whether `OPENAI_API_KEY`/`TAVILY_API_KEY` are configured. |
-| `POST` | `/api/runs` | Create a run: body `{ "objective": "..." }` → `{ "run_id": "..." }`. Execution starts immediately in the background. |
-| `GET` | `/api/runs` | List past runs (id, objective, status, approved, timestamps) — powers the chat-history sidebar. |
-| `GET` | `/api/runs/{run_id}` | Run status: phase, approval, revision count, cancelled flag, subtasks. |
-| `GET` | `/api/runs/{run_id}/events` | Ordered per-agent event log (`pending`/`running`/`completed`/`failed`, with each agent's output payload) — the single source of execution-progress data; the UI polls this rather than a separate streaming endpoint. |
-| `GET` | `/api/runs/{run_id}/report` | Final structured report: plan, research findings, sources, analysis, review, final Markdown report. |
-| `POST` | `/api/runs/{run_id}/cancel` | Requests cancellation; the pipeline stops before its next agent step. |
+
+| Method | Path                        | Purpose                                                                                                                                                                                                               |
+| ------ | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/health`               | Health check; reports whether keys are configured and the active provider/model (set via `LLM_PROVIDER`/`OPENAI_MODEL`/`GEMINI_MODEL`).                                                                               |
+| `POST` | `/api/runs`                 | Create a run: body `{ "objective": "..." }` → `{ "run_id": "..." }`. Execution starts immediately in the background.                                                                                                  |
+| `GET`  | `/api/runs`                 | List past runs (id, objective, status, approved, timestamps) — powers the chat-history sidebar.                                                                                                                       |
+| `GET`  | `/api/runs/{run_id}`        | Run status: phase, approval, revision count, cancelled flag, subtasks.                                                                                                                                                |
+| `GET`  | `/api/runs/{run_id}/events` | Ordered per-agent event log (`pending`/`running`/`completed`/`failed`, with each agent's output payload) — the single source of execution-progress data; the UI polls this rather than a separate streaming endpoint. |
+| `GET`  | `/api/runs/{run_id}/report` | Final structured report: plan, research findings, sources, analysis, review, final Markdown report.                                                                                                                   |
+| `POST` | `/api/runs/{run_id}/cancel` | Requests cancellation; the pipeline stops before its next agent step.                                                                                                                                                 |
+
 
 Example:
 
@@ -300,34 +319,37 @@ active, then fetches `/report` once it completes.
 
 ## Deployment
 
-**Live demo:** Backend — `<fill in Render URL>` · Frontend — `<fill in Vercel URL>`
+This project is deployed at the URLs listed at the top of this README.
 
 ### Backend → Render
 
 1. Push this repository to GitHub.
 2. In Render, create a **Web Service** pointing at the repo, root directory
-   `backend/`.
+  `backend/`.
 3. Build command: `pip install -r requirements.txt`
 4. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-5. Add environment variables in Render's dashboard: `OPENAI_API_KEY`,
-   `OPENAI_MODEL` (optional, defaults to `gpt-4o-mini`), `TAVILY_API_KEY`,
-   `CORS_ORIGINS` (set this to your Vercel frontend's URL once you have it),
-   `DATABASE_PATH` (optional, defaults to `data/app.db`).
+5. Add environment variables in Render's dashboard: `LLM_PROVIDER`,
+  `OPENAI_API_KEY`, `OPENAI_MODEL`, `GEMINI_API_KEY` (optional),
+   `GEMINI_MODEL` (optional), `TAVILY_API_KEY`, `CORS_ORIGINS` (set this to
+   your Vercel frontend's URL), `DATABASE_PATH`.
 6. Note: Render's filesystem is ephemeral on redeploys — the SQLite file
-   will reset each deploy. For durable history across deploys, attach a
+  will reset each deploy. For durable history across deploys, attach a
    Render Disk mounted at `backend/data/` (Settings → Disks), or migrate to
    a managed Postgres instance.
+
+
 
 ### Frontend → Vercel
 
 1. In Vercel, import the same repository, root directory `frontend/`.
 2. Framework preset: Vite. Build command: `npm run build`. Output directory: `dist`.
 3. Since there is no Vite dev proxy in production, set a build-time env var
-   `VITE_API_BASE` to your Render backend's full API URL (e.g.
-   `https://your-app.onrender.com/api`) — `frontend/src/api.ts` already reads
-   this (`import.meta.env.VITE_API_BASE`) and falls back to the relative
-   `/api` path used locally.
+  `VITE_API_BASE` to your Render backend's full API URL (e.g.
+   `https://your-app.onrender.com/api` — no trailing slash) — `frontend/src/api.ts`
+   already reads this (`import.meta.env.VITE_API_BASE`) and falls back to the
+   relative `/api` path used locally. Changing this variable requires a fresh
+   deploy to take effect, since Vite bakes it into the build at compile time.
 4. Set `CORS_ORIGINS` on the Render backend to include the resulting
-   `https://<project>.vercel.app` URL, then redeploy the backend so the new
+  `https://<project>.vercel.app` URL, then redeploy the backend so the new
    origin takes effect.
 

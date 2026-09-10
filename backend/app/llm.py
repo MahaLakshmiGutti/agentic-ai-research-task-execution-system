@@ -5,8 +5,9 @@ import time
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app import model_config
+from app.config import settings
 
+_ENV_KEY_FOR_PROVIDER = {"openai": "OPENAI_API_KEY", "google": "GEMINI_API_KEY"}
 
 # Newer frontier models reject an explicit temperature ("Unsupported value:
 # 'temperature' does not support 0.2 with this model"). Rather than hard-coding
@@ -16,12 +17,10 @@ _TEMPERATURE_UNSUPPORTED: set[str] = set()
 
 
 def _build(provider: str, model: str, temperature: float | None) -> BaseChatModel:
-    api_key = model_config.api_key_for(provider)
+    api_key = settings.api_key_for(provider)
     if not api_key:
-        spec = model_config.PROVIDERS[provider]
-        raise RuntimeError(
-            f"{spec.env_key} is not set. Add it to backend/.env before running a research task."
-        )
+        env_key = _ENV_KEY_FOR_PROVIDER.get(provider, f"{provider.upper()}_API_KEY")
+        raise RuntimeError(f"{env_key} is not set. Add it to backend/.env before running a research task.")
 
     send_temperature = temperature is not None and f"{provider}:{model}" not in _TEMPERATURE_UNSUPPORTED
 
@@ -42,8 +41,7 @@ def _build(provider: str, model: str, temperature: float | None) -> BaseChatMode
 
 
 def get_llm(temperature: float | None = 0.2) -> BaseChatModel:
-    provider, model = model_config.get_active()
-    return _build(provider, model, temperature)
+    return _build(settings.llm_provider, settings.active_model, temperature)
 
 
 _RETRY_AFTER = re.compile(r"retry in ([0-9.]+)\s*s", re.IGNORECASE)
@@ -73,7 +71,7 @@ def _invoke(messages: list, temperature: float | None):
     exceed a free tier's requests-per-minute allowance, so a 429 is retried
     with the delay the provider asks for rather than failing the run.
     """
-    provider, model = model_config.get_active()
+    provider, model = settings.llm_provider, settings.active_model
     attempt = 0
 
     while True:

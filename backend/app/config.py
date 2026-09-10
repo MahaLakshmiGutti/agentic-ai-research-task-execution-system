@@ -8,9 +8,8 @@ load_dotenv(BACKEND_DIR / ".env")
 
 
 class Settings:
-    # Which provider the agents talk to by default. Switchable at runtime from
-    # the UI (see app/model_config.py) so a demo can move between providers
-    # without a restart.
+    # Which provider the agents talk to. Fixed for the process's lifetime -
+    # change it in .env and restart the backend to switch providers.
     llm_provider: str = os.getenv("LLM_PROVIDER", "openai").strip().lower()
 
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
@@ -34,6 +33,13 @@ class Settings:
         db_file = (BACKEND_DIR / self.database_path).resolve()
         db_file.parent.mkdir(parents=True, exist_ok=True)
         return f"sqlite:///{db_file}"
+
+    @property
+    def active_model(self) -> str:
+        return self.openai_model if self.llm_provider == "openai" else self.gemini_model
+
+    def api_key_for(self, provider: str) -> str:
+        return {"openai": self.openai_api_key, "google": self.gemini_api_key}.get(provider, "")
 
 
 settings = Settings()

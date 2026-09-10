@@ -87,7 +87,16 @@ def main() -> int:
         subprocess.run([npm, "install"], cwd=FRONTEND_DIR, check=True)
 
     backend_proc = spawn(
-        [backend_python(), "-m", "uvicorn", "app.main:app", "--port", str(BACKEND_PORT)],
+        [
+            backend_python(),
+            "-m",
+            "uvicorn",
+            "app.main:app",
+            "--host",
+            "localhost",
+            "--port",
+            str(BACKEND_PORT),
+        ],
         cwd=BACKEND_DIR,
     )
     frontend_proc = spawn(
