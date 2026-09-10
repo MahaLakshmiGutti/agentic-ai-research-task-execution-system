@@ -1,47 +1,67 @@
-import { Send } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { KeyboardEvent, useState } from "react";
+import Button from "./Button";
 
 interface Props {
-  onSubmit: (objective: string) => void;
+  onSubmit: (objective: string) => Promise<boolean>;
   disabled: boolean;
+  /** Pre-fills the textarea, e.g. from a clicked example prompt. Pass a new `key` on the
+   * component to re-apply this when the same text is chosen again. */
+  initialValue?: string;
 }
 
-export default function ObjectiveForm({ onSubmit, disabled }: Props) {
-  const [objective, setObjective] = useState("");
+export default function ObjectiveForm({ onSubmit, disabled, initialValue = "" }: Props) {
+  const [objective, setObjective] = useState(initialValue);
+  const [submitting, setSubmitting] = useState(false);
 
-  function submit() {
+  async function submit() {
     const trimmed = objective.trim();
-    if (disabled || trimmed.length < 3) return;
-    onSubmit(trimmed);
-    setObjective("");
+    if (disabled || submitting || trimmed.length < 3) return;
+    setSubmitting(true);
+    try {
+      const ok = await onSubmit(trimmed);
+      if (ok) setObjective("");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      submit();
+      void submit();
     }
   }
 
+  const isDisabled = disabled || submitting;
+
   return (
-    <div className="flex items-end gap-2">
-      <textarea
-        value={objective}
-        onChange={(e) => setObjective(e.target.value)}
-        onKeyDown={handleKeyDown}
-        disabled={disabled}
-        rows={2}
-        placeholder="Ask a research question... (Enter to send, Shift+Enter for a new line)"
-        className="max-h-40 flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none disabled:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:text-slate-500"
-      />
-      <button
-        onClick={submit}
-        disabled={disabled || objective.trim().length < 3}
-        aria-label="Send"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-600"
-      >
-        <Send size={16} />
-      </button>
+    <div className="rounded-xl border border-border bg-surface p-4 shadow-subtle transition duration-150 focus-within:border-accent/50 focus-within:ring-2 focus-within:ring-accent/20 sm:p-5">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
+          <Sparkles size={16} />
+        </div>
+        <textarea
+          value={objective}
+          onChange={(e) => setObjective(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={isDisabled}
+          rows={3}
+          placeholder="Example: Analyze the latest developments in Generative AI and prepare a structured report covering key trends, companies, challenges, and future opportunities."
+          className="max-h-52 w-full resize-none border-0 bg-transparent p-0 text-sm leading-relaxed text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-0 disabled:text-text-muted"
+        />
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+        <p className="text-[11px] text-text-muted">Enter to run · Shift+Enter for a new line</p>
+        <Button
+          onClick={() => void submit()}
+          disabled={isDisabled || objective.trim().length < 3}
+          size="md"
+        >
+          Run Research
+          <ArrowRight size={15} />
+        </Button>
+      </div>
     </div>
   );
 }

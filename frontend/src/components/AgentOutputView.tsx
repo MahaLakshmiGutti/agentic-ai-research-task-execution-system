@@ -1,8 +1,8 @@
 import {
   BrainCircuit,
-  ClipboardList,
+  ListTodo,
   PenLine,
-  SearchCheck,
+  Search,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
@@ -14,9 +14,9 @@ import ResearchView from "./ResearchView";
 import ReviewView from "./ReviewView";
 
 const STAGES: { key: AgentKey; label: string; icon: LucideIcon }[] = [
-  { key: "planner", label: "Planner", icon: ClipboardList },
-  { key: "researcher", label: "Researcher", icon: SearchCheck },
-  { key: "analyst", label: "Analyst", icon: BrainCircuit },
+  { key: "planner", label: "Planner", icon: ListTodo },
+  { key: "researcher", label: "Researcher", icon: Search },
+  { key: "analyst", label: "Analyzer", icon: BrainCircuit },
   { key: "writer", label: "Writer", icon: PenLine },
   { key: "reviewer", label: "Reviewer", icon: ShieldCheck },
   { key: "writer_revision", label: "Writer (Revision)", icon: PenLine },
@@ -63,12 +63,12 @@ export default function AgentOutputView({
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-          Select an agent
+      <section className="rounded-xl border border-border bg-surface p-5 shadow-subtle">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
+          Agent output
         </p>
         {availableStages.length === 0 ? (
-          <p className="text-sm text-slate-400 dark:text-slate-500">
+          <p className="text-sm text-text-muted">
             No agent has produced output yet — check back once a step completes.
           </p>
         ) : (
@@ -83,12 +83,12 @@ export default function AgentOutputView({
                   type="button"
                   disabled={!available}
                   onClick={() => onSelectAgent(stage.key)}
-                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition duration-150 ${
                     selected
-                      ? "border-indigo-600 bg-indigo-600 text-white"
+                      ? "border-accent bg-accent text-white"
                       : available
-                        ? "border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
-                        : "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-600"
+                        ? "border-border bg-surface text-text-secondary hover:border-accent/40 hover:text-accent"
+                        : "cursor-not-allowed border-border/60 bg-surface-2/50 text-text-muted"
                   }`}
                 >
                   <Icon size={13} />

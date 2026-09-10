@@ -1,3 +1,4 @@
+import { ListTodo } from "lucide-react";
 import type { PlanTask } from "../types";
 import Section from "./Section";
 
@@ -9,12 +10,15 @@ export default function PlanView({ plan }: { plan: PlanTask[] }) {
         {plan.map((task) => (
           <li
             key={task.id}
-            className="rounded-lg border border-slate-100 bg-slate-50 p-3 dark:border-slate-700/60 dark:bg-slate-900/40"
+            className="flex gap-3 rounded-lg border border-border bg-surface-2/50 p-3"
           >
-            <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
-              {task.id + 1}. {task.title}
-            </p>
-            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{task.description}</p>
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
+              <ListTodo size={12} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-text-primary">{task.title}</p>
+              <p className="mt-0.5 text-xs text-text-secondary">{task.description}</p>
+            </div>
           </li>
         ))}
       </ol>

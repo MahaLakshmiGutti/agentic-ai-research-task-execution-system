@@ -13,7 +13,7 @@ export default function DraftView({
 
   return (
     <Section title={title}>
-      <article className="prose prose-sm dark:prose-invert max-w-none prose-headings:font-semibold prose-table:text-xs">
+      <article className="prose prose-sm dark:prose-invert max-w-none prose-headings:font-semibold prose-a:text-accent prose-table:text-xs">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft}</ReactMarkdown>
       </article>
     </Section>

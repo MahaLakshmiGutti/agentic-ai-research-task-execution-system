@@ -1,5 +1,6 @@
 import type { ResearchFinding, Source } from "../types";
 import Section from "./Section";
+import SourceCard from "./SourceCard";
 
 export default function ResearchView({
   findings,
@@ -13,14 +14,11 @@ export default function ResearchView({
     <Section title="Research findings" subtitle={`${sources.length} sources gathered via Tavily`}>
       <div className="space-y-3">
         {findings.map((f) => (
-          <div
-            key={f.task_id}
-            className="rounded-lg border border-slate-100 bg-slate-50 p-3 dark:border-slate-700/60 dark:bg-slate-900/40"
-          >
-            <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{f.task_title}</p>
-            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{f.summary}</p>
+          <div key={f.task_id} className="rounded-lg border border-border bg-surface-2/50 p-3">
+            <p className="text-sm font-medium text-text-primary">{f.task_title}</p>
+            <p className="mt-1 text-xs text-text-secondary">{f.summary}</p>
             {f.key_points.length > 0 && (
-              <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-slate-600 dark:text-slate-400">
+              <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-text-secondary">
                 {f.key_points.map((p, i) => (
                   <li key={i}>{p}</li>
                 ))}
@@ -32,24 +30,12 @@ export default function ResearchView({
 
       {sources.length > 0 && (
         <div className="mt-4">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Sources
-          </h3>
-          <ul className="space-y-1">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Sources</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
             {sources.map((s) => (
-              <li key={s.url} className="truncate text-xs">
-                <a
-                  href={s.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-indigo-600 hover:underline dark:text-indigo-400"
-                  title={s.snippet}
-                >
-                  {s.title || s.url}
-                </a>
-              </li>
+              <SourceCard key={s.url} source={s} />
             ))}
-          </ul>
+          </div>
         </div>
       )}
     </Section>
