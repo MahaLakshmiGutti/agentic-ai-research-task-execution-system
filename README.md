@@ -205,21 +205,6 @@ fallback for models that reject an explicit `temperature`.
 **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, `lucide-react`
 (icons), `react-markdown` + `remark-gfm` (report rendering).
 
-The UI is a multi-page dashboard (client-side page state, no router
-dependency) with a collapsible sidebar and top navbar, built on a shared
-design-token system (`frontend/src/index.css` + `tailwind.config.js`) that
-supports light and dark mode (auto-detects system preference, persists the
-choice in `localStorage`):
-
-- **Dashboard** — summary stats and recent research runs.
-- **New Research** — the objective input, with clickable example prompts.
-- **Research History** — every past run, grouped by date.
-- **Agent Activity** — the live/completed workflow for a run: a visual
-  pipeline (`AgentWorkflow`) showing each agent's status and the
-  reject → revise → approve reflection loop when it occurs, a chronological
-  event timeline (`AgentTimeline`), and a per-agent detail view.
-- **Reports** — the approved final report, rendered as a readable document
-  with copy/download actions.
 
 **Persistence:** SQLite (file-based, zero-infra). Note Render's filesystem is ephemeral across redeploys — see
 [Deployment](#deployment).
